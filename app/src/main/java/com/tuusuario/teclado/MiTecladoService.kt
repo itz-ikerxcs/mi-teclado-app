@@ -16,25 +16,44 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val client = OkHttpClient()
-    
-    private var acentoSeleccionado = "US" // Variable para guardar el acento actual
+
+    private lateinit var keyboardView: KeyboardView
+    private lateinit var qwertyKeyboard: Keyboard
+    private lateinit var symbolsKeyboard: Keyboard
+    private lateinit var symbolsAltKeyboard: Keyboard
+
+    private var isCaps = false
+    private var acentoSeleccionado = "US"
+
     private lateinit var btnUS: Button
     private lateinit var btnUK: Button
+    private lateinit var btnTraducir: Button
+
+    companion object {
+        const val CODE_SHIFT = -1
+        const val CODE_DELETE = -5
+        const val CODE_ENTER = 10
+        const val CODE_SPACE = 32
+        const val CODE_MODE_SYMBOLS = -2
+        const val CODE_MODE_ALT = -3
+        const val CODE_MODE_ABC = -6
+    }
 
     override fun onCreateInputView(): View {
         val view = layoutInflater.inflate(R.layout.teclado_view, null)
 
-        // Configurar panel de letras QWERTY
-        val keyboardView = view.findViewById<KeyboardView>(R.id.keyboardView)
-        val keyboard = Keyboard(this, R.xml.qwerty)
-        keyboardView.keyboard = keyboard
+        qwertyKeyboard = Keyboard(this, R.xml.keyboard_qwerty)
+        symbolsKeyboard = Keyboard(this, R.xml.keyboard_symbols)
+        symbolsAltKeyboard = Keyboard(this, R.xml.keyboard_symbols_alt)
+
+        keyboardView = view.findViewById(R.id.keyboardView)
+        keyboardView.keyboard = qwertyKeyboard
         keyboardView.setOnKeyboardActionListener(this)
 
-        // Referencias a los botones de acento
         btnUS = view.findViewById(R.id.btnAcentoUS)
         btnUK = view.findViewById(R.id.btnAcentoUK)
+        btnTraducir = view.findViewById(R.id.btnTraducir)
 
-        // Estado inicial (US seleccionado por defecto)
         actualizarEstiloBotones()
 
         btnUS.setOnClickListener {
@@ -47,8 +66,6 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
             actualizarEstiloBotones()
         }
 
-        // Botón de traducción
-        val btnTraducir = view.findViewById<Button>(R.id.btnTraducir)
         btnTraducir.setOnClickListener {
             dispararTraduccion()
         }
@@ -58,21 +75,51 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private fun actualizarEstiloBotones() {
         if (acentoSeleccionado == "US") {
-            btnUS.setBackgroundColor(Color.parseColor("#444444")) // Más oscuro si está activo
-            btnUK.setBackgroundColor(Color.parseColor("#222222")) // Más claro si está inactivo
+            btnUS.setBackgroundColor(Color.parseColor("#5B433B"))
+            btnUS.setTextColor(Color.parseColor("#FFFFFF"))
+            btnUK.setBackgroundColor(Color.parseColor("#3D322F"))
+            btnUK.setTextColor(Color.parseColor("#C8B8B0"))
         } else {
-            btnUK.setBackgroundColor(Color.parseColor("#444444"))
-            btnUS.setBackgroundColor(Color.parseColor("#222222"))
+            btnUK.setBackgroundColor(Color.parseColor("#5B433B"))
+            btnUK.setTextColor(Color.parseColor("#FFFFFF"))
+            btnUS.setBackgroundColor(Color.parseColor("#3D322F"))
+            btnUS.setTextColor(Color.parseColor("#C8B8B0"))
         }
     }
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         val inputConnection = currentInputConnection ?: return
+
         when (primaryCode) {
-            -5 -> inputConnection.deleteSurroundingText(1, 0) // Borrar
-            10 -> inputConnection.commitText("\n", 1)         // Enter
+            CODE_DELETE -> inputConnection.deleteSurroundingText(1, 0)
+
+            CODE_SHIFT -> {
+                isCaps = !isCaps
+                qwertyKeyboard.isShifted = isCaps
+                keyboardView.invalidateAllKeys()
+            }
+
+            CODE_ENTER -> inputConnection.commitText("\n", 1)
+
+            CODE_SPACE -> inputConnection.commitText(" ", 1)
+
+            CODE_MODE_SYMBOLS -> {
+                keyboardView.keyboard = symbolsKeyboard
+            }
+
+            CODE_MODE_ALT -> {
+                keyboardView.keyboard = symbolsAltKeyboard
+            }
+
+            CODE_MODE_ABC -> {
+                keyboardView.keyboard = qwertyKeyboard
+            }
+
             else -> {
-                val codeChar = primaryCode.toChar()
+                var codeChar = primaryCode.toChar()
+                if (isCaps && codeChar.isLowerCase()) {
+                    codeChar = codeChar.uppercaseChar()
+                }
                 inputConnection.commitText(codeChar.toString(), 1)
             }
         }
@@ -83,13 +130,16 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
         val textoEspanol = inputConnection.getTextBeforeCursor(500, 0).toString()
         if (textoEspanol.isBlank()) return
 
+        btnTraducir.text = "⏳ Traduciendo..."
+        btnTraducir.isEnabled = false
+
         serviceScope.launch {
             try {
                 val url = "https://api-dyat.onrender.com/api/traducir"
-                
+
                 val jsonBody = JSONObject().apply {
                     put("texto", textoEspanol)
-                    put("acento", acentoSeleccionado) // Envía "US" o "UK" según lo que elegiste
+                    put("acento", acentoSeleccionado)
                     put("tono", "Informal")
                 }
 
@@ -110,6 +160,11 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+            } finally {
+                withContext(Dispatchers.Main) {
+                    btnTraducir.text = "✨ Traducir"
+                    btnTraducir.isEnabled = true
+                }
             }
         }
     }
