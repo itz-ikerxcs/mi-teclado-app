@@ -5,6 +5,7 @@
     android:orientation="vertical"
     android:background="#1E1E1E">
 
+    <!-- Barra superior con tus botones de traducción -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="50dp"
@@ -33,4 +34,13 @@
             android:backgroundTint="#6200EE"
             android:textColor="#FFFFFF" />
     </LinearLayout>
+
+    <!-- Panel de letras QWERTY -->
+    <android.inputmethodservice.KeyboardView
+        android:id="@+id/keyboardView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+
 </LinearLayout>
