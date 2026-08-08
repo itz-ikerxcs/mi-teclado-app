@@ -1,5 +1,6 @@
 package com.tuusuario.teclado
 
+import android.graphics.Color
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
@@ -15,17 +16,38 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val client = OkHttpClient()
+    
+    private var acentoSeleccionado = "US" // Variable para guardar el acento actual
+    private lateinit var btnUS: Button
+    private lateinit var btnUK: Button
 
     override fun onCreateInputView(): View {
         val view = layoutInflater.inflate(R.layout.teclado_view, null)
 
-        // Configurar panel de letras
+        // Configurar panel de letras QWERTY
         val keyboardView = view.findViewById<KeyboardView>(R.id.keyboardView)
         val keyboard = Keyboard(this, R.xml.qwerty)
         keyboardView.keyboard = keyboard
         keyboardView.setOnKeyboardActionListener(this)
 
-        // Configurar botón de traducción
+        // Referencias a los botones de acento
+        btnUS = view.findViewById(R.id.btnAcentoUS)
+        btnUK = view.findViewById(R.id.btnAcentoUK)
+
+        // Estado inicial (US seleccionado por defecto)
+        actualizarEstiloBotones()
+
+        btnUS.setOnClickListener {
+            acentoSeleccionado = "US"
+            actualizarEstiloBotones()
+        }
+
+        btnUK.setOnClickListener {
+            acentoSeleccionado = "UK"
+            actualizarEstiloBotones()
+        }
+
+        // Botón de traducción
         val btnTraducir = view.findViewById<Button>(R.id.btnTraducir)
         btnTraducir.setOnClickListener {
             dispararTraduccion()
@@ -34,7 +56,16 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
         return view
     }
 
-    // Manejo del toque en las letras y botones virtuales
+    private fun actualizarEstiloBotones() {
+        if (acentoSeleccionado == "US") {
+            btnUS.setBackgroundColor(Color.parseColor("#444444")) // Más oscuro si está activo
+            btnUK.setBackgroundColor(Color.parseColor("#222222")) // Más claro si está inactivo
+        } else {
+            btnUK.setBackgroundColor(Color.parseColor("#444444"))
+            btnUS.setBackgroundColor(Color.parseColor("#222222"))
+        }
+    }
+
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         val inputConnection = currentInputConnection ?: return
         when (primaryCode) {
@@ -58,7 +89,7 @@ class MiTecladoService : InputMethodService(), KeyboardView.OnKeyboardActionList
                 
                 val jsonBody = JSONObject().apply {
                     put("texto", textoEspanol)
-                    put("acento", "US")
+                    put("acento", acentoSeleccionado) // Envía "US" o "UK" según lo que elegiste
                     put("tono", "Informal")
                 }
 
